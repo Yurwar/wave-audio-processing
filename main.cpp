@@ -1,5 +1,7 @@
 #include <iostream>
 #include <fstream>
+#include <cmath>
+#include <cstring>
 
 using namespace std;
 
@@ -24,23 +26,21 @@ struct SUBCHUNK2{
     int32_t subchunk2Id;
     int32_t subchunk2Size;
 
-    int8_t data[];
+    int16_t **data16;
 };
 
 
 int main(int argc, char* argv[]) {
     FILE* file = fopen(argv[1], "rb");
     if(file == nullptr) {
-        cout << "Can not open the file" << endl;
+        cout << "Opening problem, please check your file" << endl;
         exit(1);
     } else {
-        ///First variant of filling data
 
         RIFFHEADER riffheader;
         fread(&riffheader, sizeof(RIFFHEADER), 1, file);
         SUBCHUNK1 subchunk1;
         fread(&subchunk1, sizeof(SUBCHUNK1), 1, file);
-
         SUBCHUNK2 subchunk2;
         fread(&subchunk2, sizeof(SUBCHUNK2), 1, file);
 
@@ -59,51 +59,83 @@ int main(int argc, char* argv[]) {
              << "subchunk2Size:\t" << subchunk2.subchunk2Size << endl;                  //57600
 
 
-        ///Second variant of filling data
-        /*
-        int32_t chunkId;
-        int32_t chunkSize;
-        int32_t format;
-        int32_t subchunk1Id;
-        int32_t subchunk1Size;
-        int16_t audioFormat;
-        int16_t numChannels;
-        int32_t sampleRate;
-        int32_t byteRate;
-        int16_t blockAlign;
-        int16_t bitsPerSample;
-        int32_t subchunk2Id;
-        int32_t subchunk2Size;
+        float fDurationSeconds = 1.f * subchunk2.subchunk2Size / (subchunk1.bitsPerSample / 8) / subchunk1.numChannels / subchunk1.sampleRate;
+        int iDurationMinutes = (int)floor(fDurationSeconds) / 60;
+        fDurationSeconds = fDurationSeconds - (iDurationMinutes * 60);
+        cout << "Input-audio duration in seconds:\t" << fDurationSeconds << endl;
 
-        int8_t data[] = {};
+        int numSamples = (8 * subchunk2.subchunk2Size) / (subchunk1.numChannels * subchunk1.bitsPerSample);
+        cout << "Number of samples:\t" << numSamples << endl;
 
-        fread(&chunkId, sizeof(int32_t), 1, file);            //1179011410
-        fread(&chunkSize, sizeof(int32_t), 1, file);          //57636
-        fread(&format, sizeof(int32_t), 1, file);             //1163280727
-        fread(&subchunk1Id, sizeof(int32_t), 1, file);        //544501094
-        fread(&subchunk1Size, sizeof(int32_t), 1, file);      //16
-        fread(&audioFormat, sizeof(int16_t), 1, file);        //1
-        fread(&numChannels, sizeof(int16_t), 1, file);        //1
-        fread(&sampleRate, sizeof(int32_t), 1, file);         //11025
-        fread(&byteRate, sizeof(int32_t), 1, file);           //22050
-        fread(&blockAlign, sizeof(int16_t), 1, file);         //2
-        fread(&bitsPerSample, sizeof(int16_t), 1, file);      //16
-        fread(&subchunk2Id, sizeof(int32_t), 1, file);        //1635017060
-        fread(&subchunk2Size, sizeof(int32_t), 1, file);      //57600
+        numSamples = subchunk2.subchunk2Size / subchunk1.blockAlign; //all right
+//        cout << subchunk2.subchunk2Size << " " << subchunk1.blockAlign <<  " " << numSamples << endl;
+        subchunk2.data16 = new int16_t *[subchunk1.numChannels];
+        for(int i = 0; i < subchunk1.numChannels; i++)
+            subchunk2.data16[i] = new int16_t[numSamples];
 
-        cout << "chunkId:\t" << chunkId << endl
-             << "chunkSize:\t" << chunkSize << endl
-             << "format:\t" << format << endl
-             << "subchunk1Id:\t" << subchunk1Id << endl
-             << "subchunk1Size:\t" << subchunk1Size << endl
-             << "audioFormat:\t" << audioFormat << endl
-             << "numChannels:\t" << numChannels << endl
-             << "sampleRate:\t" << sampleRate << endl
-             << "byteRate:\t" << byteRate << endl
-             << "blockAlign:\t" << blockAlign << endl
-             << "bitsPerSample:\t" << bitsPerSample << endl
-             << "subchunk2Id:\t" << subchunk2Id << endl
-             << "subchunk2Size:\t" << subchunk2Size << endl;
-        */
+        for(int i = 0; i < numSamples; i++) {
+            for (int j = 0; j < subchunk1.numChannels; j++) {
+                fread(&subchunk2.data16[j][i], sizeof(int16_t), 1, file);
+//                cout << hex << subchunk2.data16[j][i] << "   ";
+            }
+        }
+
+        cout << endl;
+
+        int counter = atoi(argv[2]);
+        cout << "Your audio will be slown down by " << counter << " times." << endl;
+        numSamples = counter * numSamples;
+        subchunk2.subchunk2Size = subchunk1.blockAlign * numSamples;
+        riffheader.chunkSize = subchunk2.subchunk2Size + 36;
+//        cout << riffheader.chunkSize << " " << subchunk2.subchunk2Size << endl;
+
+
+        for(int i = 0; i < numSamples; i++)
+                for (int j = 0; j < subchunk1.numChannels; j++) {
+//                    cout << hex << subchunk2.data16[j][i] << "   ";
+
+                }
+
+        RIFFHEADER outRiffheader;
+        SUBCHUNK1 outSubchunk1;
+        SUBCHUNK2 outSubchunk2;
+
+        memcpy (&outRiffheader, &riffheader, sizeof(RIFFHEADER));
+        memcpy(&outSubchunk1, &subchunk1, sizeof(SUBCHUNK1));
+        memcpy(&outSubchunk2, &subchunk2, sizeof(SUBCHUNK2));
+
+//        outRiffheader.format = riffheader.format;
+//        outRiffheader.chunkSize = riffheader.chunkSize;
+//        outRiffheader.chunkId = riffheader.chunkId;
+//
+//        outSubchunk1.subchunk1Id = subchunk1.subchunk1Id;
+//        outSubchunk1.subchunk1Size = subchunk1.subchunk1Size;
+//        outSubchunk1.audioFormat = subchunk1.audioFormat;
+//        outSubchunk1.numChannels = subchunk1.numChannels;
+//        outSubchunk1.sampleRate = subchunk1.sampleRate;
+//        outSubchunk1.byteRate = subchunk1.byteRate;
+//        outSubchunk1.blockAlign = subchunk1.blockAlign;
+//        outSubchunk1.bitsPerSample = subchunk1.bitsPerSample;
+//
+//        outSubchunk2.subchunk2Id = subchunk2.subchunk2Id;
+//        outSubchunk2.subchunk2Size = subchunk2.subchunk2Size;
+
+        FILE* outputFile;
+        outputFile = fopen("output.wav", "wb");
+        fwrite(&outRiffheader, sizeof(RIFFHEADER), 1, outputFile);
+        fwrite(&outSubchunk1, sizeof(SUBCHUNK1), 1, outputFile);
+        fwrite(&outSubchunk2, sizeof(SUBCHUNK2), 1, outputFile);
+
+
+
+        for(int i = 0; i < numSamples; i++)
+            for (int k = 0; k < counter; k++)
+                for (int j = 0; j < subchunk1.numChannels; j++) {
+                    fwrite(&subchunk2.data16[j][i], sizeof(int16_t), 1, outputFile);
+//                    cout << hex << subchunk2.data16[j][i] << "   ";
+
+                }
     }
+
+    return 0;
 }
